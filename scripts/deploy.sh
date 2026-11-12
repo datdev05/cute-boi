@@ -3,6 +3,8 @@ set -euo pipefail
 
 : "${VPS_HOST:?Add VPS_HOST to GitHub Actions secrets}"
 : "${VPS_PRIVATE_KEY:?Add VPS_PRIVATE_KEY to GitHub Actions secrets}"
+: "${CONTAINER_NAME:=cute-boi}"
+: "${APP_PORT:=3015}"
 : "${VPS_USER:=deploy}"
 : "${VPS_PORT:=22}"
 : "${VPS_DEPLOY_PATH:=/var/www/cute-boi}"
@@ -15,6 +17,8 @@ set -euo pipefail
 [[ "$VPS_PORT" =~ ^[0-9]{1,5}$ ]] && (( 10#$VPS_PORT > 0 && 10#$VPS_PORT <= 65535 )) || exit 1
 [[ "$VPS_DEPLOY_PATH" =~ ^/[a-zA-Z0-9_/-]+$ && "$VPS_DEPLOY_PATH" != / && "$VPS_DEPLOY_PATH" != *..* ]] || exit 1
 [[ "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ && "$GITHUB_RUN_ID" =~ ^[0-9]+$ && "$GITHUB_RUN_ATTEMPT" =~ ^[0-9]+$ ]] || exit 1
+[[ "$CONTAINER_NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]] || exit 1
+[[ "$APP_PORT" =~ ^[0-9]{1,5}$ ]] && (( 10#$APP_PORT > 0 && 10#$APP_PORT <= 65535 )) || exit 1
 [[ -f nho-em/dist/index.html ]] || exit 1
 
 ssh_dir=$(mktemp -d)
@@ -27,9 +31,8 @@ ssh_options=(-i "$ssh_dir/key" -p "$VPS_PORT" -o BatchMode=yes -o IdentitiesOnly
 target="$VPS_USER@$VPS_HOST"
 release="$VPS_DEPLOY_PATH/releases/$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
 
-# Only the website output is transferred; no Git files, keys or hosting metadata.
+# Upload only the Docker build context, never Git files or credentials.
 ssh "${ssh_options[@]}" "$target" "mkdir -p '$release'"
-tar -C nho-em/dist --exclude='.DS_Store' -czf - . | ssh "${ssh_options[@]}" "$target" "tar -xzf - -C '$release' && test -s '$release/index.html' && chmod -R a+rX '$release'"
-# Switch the served directory only after upload succeeds; keep old releases for rollback.
-ssh "${ssh_options[@]}" "$target" "ln -s '$release' '$release.link' && mv -Tf '$release.link' '$VPS_DEPLOY_PATH/current'"
-echo 'Deployment complete. Previous releases retained for rollback.'
+tar --exclude='.DS_Store' -czf - Dockerfile .dockerignore deploy/nginx.conf scripts/deploy-container.sh nho-em/dist | ssh "${ssh_options[@]}" "$target" "tar -xzf - -C '$release'"
+ssh "${ssh_options[@]}" "$target" "bash '$release/scripts/deploy-container.sh' '$release' '$CONTAINER_NAME' '$APP_PORT' '$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT'"
+echo "Docker deployment complete on port $APP_PORT."

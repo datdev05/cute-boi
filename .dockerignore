@@ -1,0 +1,8 @@
+**
+!Dockerfile
+!deploy/
+!deploy/nginx.conf
+!nho-em/
+!nho-em/dist/
+!nho-em/dist/**
+**/.DS_Store

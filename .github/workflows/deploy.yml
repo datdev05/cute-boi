@@ -1,5 +1,9 @@
 name: Check and deploy website
 
+env:
+  CONTAINER_NAME: cute-boi
+  APP_PORT: "3015"
+
 on:
   push:
     branches: [main]
@@ -26,7 +30,9 @@ jobs:
           python3 scripts/check-site.py
           node --check /tmp/cute-boi-inline.js
       - name: Check deployment script
-        run: bash -n scripts/deploy.sh
+        run: |
+          bash -n scripts/deploy.sh
+          bash -n scripts/deploy-container.sh
 
   deploy:
     needs: check
@@ -37,7 +43,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - name: Deploy static site over SSH
+      - name: Build and deploy Docker container over SSH
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_PRIVATE_KEY: ${{ secrets.VPS_PRIVATE_KEY }}

@@ -1,60 +1,61 @@
 # Cute boi — một chiếc ping
 
-Website tĩnh trong `nho-em/dist/`. Xem [hướng dẫn website](nho-em/README.md).
+Website trong `nho-em/dist/`. Xem [hướng dẫn website](nho-em/README.md).
 
-## CI/CD lên VPS
+## Docker CI/CD lên VPS
 
-Workflow `.github/workflows/deploy.yml` kiểm tra tài nguyên HTML, ID trùng, cú pháp JavaScript và script deploy. Pull request vào `main` chỉ chạy kiểm tra. Push lên `main` hoặc **Actions → Check and deploy website → Run workflow** trên `main` sẽ kiểm tra rồi triển khai.
+Đầu `.github/workflows/deploy.yml` có cấu hình dễ sửa:
+
+```yaml
+env:
+  CONTAINER_NAME: cute-boi
+  APP_PORT: "3015"
+```
+
+Push lên `main` hoặc chạy **Actions → Check and deploy website → Run workflow** trên `main`: kiểm tra website, tải Docker build context lên VPS qua SSH, build image Nginx, kiểm tra container thử rồi thay container chính. Truy cập **http://IP_VPS:3015**. PR chỉ chạy kiểm tra.
 
 ### GitHub Actions Secrets
-
-Vào **Settings → Secrets and variables → Actions → Secrets**:
 
 | Secret | Giá trị |
 | --- | --- |
 | `VPS_HOST` | IP hoặc hostname VPS, không có `https://` |
-| `VPS_PRIVATE_KEY` | Toàn bộ SSH private key, gồm dòng BEGIN/END; dùng key deploy không có passphrase |
-| `VPS_USER` | User SSH, mặc định `deploy` nếu để trống |
-| `VPS_PORT` | Port SSH, mặc định `22` nếu để trống |
+| `VPS_PRIVATE_KEY` | Toàn bộ SSH private key không có passphrase |
+| `VPS_USER` | User SSH; mặc định `deploy` |
+| `VPS_PORT` | Port SSH; mặc định `22` |
 
-Không cần `VPS_KNOWN_HOSTS`. Script dùng `StrictHostKeyChecking=accept-new`: tự chấp nhận host key ở kết nối đầu mỗi lần chạy và từ chối nếu key đổi trong cùng lần deploy. Key không được đối chiếu trước hoặc lưu giữa các workflow run.
+Tuỳ chọn: **Variable** `VPS_DEPLOY_PATH`, mặc định `/var/www/cute-boi`, là nơi chứa build context từng release.
 
-Tuỳ chọn: đặt **Variable** `VPS_DEPLOY_PATH` nếu muốn đổi thư mục mặc định `/var/www/cute-boi`.
+SSH tự chấp nhận host key lần đầu mỗi workflow run (`accept-new`), không đối chiếu danh tính VPS từ trước. Các kết nối tiếp trong cùng run từ chối key thay đổi.
 
-### Chuẩn bị VPS một lần (Ubuntu/Debian + Nginx)
+### Chuẩn bị VPS
+
+Cần Linux với Bash, tar, curl và Docker Engine đang chạy. User SSH phải có public key tương ứng trong `~/.ssh/authorized_keys`, được ghi thư mục deploy và chạy Docker không cần sudo:
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y nginx
-sudo adduser --disabled-password --gecos '' deploy
-sudo install -d -m 700 -o deploy -g deploy /home/deploy/.ssh
-sudo nano /home/deploy/.ssh/authorized_keys
-# Dán PUBLIC KEY tương ứng với VPS_PRIVATE_KEY, mỗi key một dòng.
-sudo chown deploy:deploy /home/deploy/.ssh/authorized_keys
-sudo chmod 600 /home/deploy/.ssh/authorized_keys
+# Thay deploy bằng VPS_USER nếu khác.
+sudo usermod -aG docker deploy
 sudo install -d -m 755 -o deploy -g deploy /var/www/cute-boi/releases
 ```
 
-Cho phép SSH (mặc định port 22) và HTTP (port 80) trong firewall VPS. User deploy không cần sudo khi pipeline chạy.
+Đăng nhập SSH lại sau khi thêm nhóm. Nhóm `docker` có quyền tương đương root, chỉ thêm user triển khai tin cậy. Cho phép TCP **3015** trên firewall VPS và security group của nhà cung cấp.
 
-Copy nội dung `deploy/nginx.conf` vào `/etc/nginx/sites-available/cute-boi`, sửa `server_name` nếu có domain. Nếu đổi `VPS_DEPLOY_PATH`, đổi cả `root` trong Nginx.
+Không cần cài Nginx trực tiếp trên VPS cho cấu hình này: `deploy/nginx.conf` được copy vào image. Nginx cũ ở port 80 có thể vẫn chạy; website Docker nằm ở port 3015. Nếu cần domain/HTTPS, cấu hình reverse proxy riêng tới `localhost:3015`.
 
-```bash
-sudo ln -s /etc/nginx/sites-available/cute-boi /etc/nginx/sites-enabled/cute-boi
-# Chỉ tắt site mặc định nếu đây là VPS dành cho website này:
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-Sau deployment đầu tiên, mở `http://YOUR_VPS_HOST` hoặc domain đã cấu hình. HTTPS cần cấu hình chứng chỉ riêng cho domain. Nginx không cần reload ở các lần deploy tiếp theo.
-
-Mỗi lần deploy tạo một thư mục release và chuyển symlink `current` sau khi tải xong. Các bản cũ được giữ lại, cần dọn định kỳ. Rollback trên VPS bằng cách chọn release cũ:
+### Kiểm tra trên VPS
 
 ```bash
-ls /var/www/cute-boi/releases
-ln -s /var/www/cute-boi/releases/RELEASE_CU /var/www/cute-boi/rollback
-mv -Tf /var/www/cute-boi/rollback /var/www/cute-boi/current
+docker ps --filter name=cute-boi
+docker logs --tail 50 cute-boi
+curl -I http://localhost:3015
 ```
 
-Pipeline chuyển toàn bộ `nho-em/dist/` lên VPS, bao gồm hai ảnh. Chỉ đẩy commit lên GitHub khi đã sẵn sàng triển khai.
+Container dùng `--restart unless-stopped`. Mỗi release có image riêng. Nếu image mới hoặc health check thất bại trước chuyển đổi, container cũ tiếp tục chạy. Nếu thay container thất bại, script khôi phục container cũ; có gián đoạn ngắn lúc chuyển đổi. Build context và image cũ được giữ lại để kiểm tra, cần dọn định kỳ.
+
+### Chạy Docker tại máy
+
+```bash
+docker build -t cute-boi-site .
+docker run -d --name cute-boi --restart unless-stopped -p 3015:80 cute-boi-site
+```
+
+Pipeline tải cả hai ảnh trong `nho-em/dist/` lên VPS. Chỉ triển khai khi bạn đã sẵn sàng chia sẻ nội dung website.
