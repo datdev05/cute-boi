@@ -61,8 +61,9 @@ fi
 docker run -d --name "$container_name" --restart unless-stopped \
   -p "$app_port:80" "$image" >/dev/null
 wait_ready "$container_name"
-curl --fail --silent --show-error --retry 5 --retry-connrefused --retry-delay 1 \
-  --connect-timeout 3 --max-time 5 "http://127.0.0.1:$app_port/" >/dev/null
+curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 1 \
+  --retry-max-time 30 --connect-timeout 3 --max-time 5 \
+  --output /dev/null "http://127.0.0.1:$app_port/"
 switching=false
 if [[ "$had_previous" == true ]]; then
   docker rm "$backup" >/dev/null
