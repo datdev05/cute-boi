@@ -41,8 +41,7 @@ jobs:
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_PRIVATE_KEY: ${{ secrets.VPS_PRIVATE_KEY }}
-          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
-          VPS_USER: ${{ vars.VPS_USER || 'deploy' }}
-          VPS_PORT: ${{ vars.VPS_PORT || '22' }}
+          VPS_USER: ${{ secrets.VPS_USER || 'deploy' }}
+          VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
           VPS_DEPLOY_PATH: ${{ vars.VPS_DEPLOY_PATH || '/var/www/cute-boi' }}
         run: bash scripts/deploy.sh

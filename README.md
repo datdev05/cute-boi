@@ -14,23 +14,12 @@ Vào **Settings → Secrets and variables → Actions → Secrets**:
 | --- | --- |
 | `VPS_HOST` | IP hoặc hostname VPS, không có `https://` |
 | `VPS_PRIVATE_KEY` | Toàn bộ SSH private key, gồm dòng BEGIN/END; dùng key deploy không có passphrase |
-| `VPS_KNOWN_HOSTS` | Host key SSH của VPS ở định dạng known_hosts |
+| `VPS_USER` | User SSH, mặc định `deploy` nếu để trống |
+| `VPS_PORT` | Port SSH, mặc định `22` nếu để trống |
 
-Lấy host key bằng lệnh dưới đây, **đối chiếu fingerprint với console VPS** trước khi lưu vào Secret:
+Không cần `VPS_KNOWN_HOSTS`. Script dùng `StrictHostKeyChecking=accept-new`: tự chấp nhận host key ở kết nối đầu mỗi lần chạy và từ chối nếu key đổi trong cùng lần deploy. Key không được đối chiếu trước hoặc lưu giữa các workflow run.
 
-```bash
-ssh-keyscan -H YOUR_VPS_HOST
-# Nếu SSH dùng port riêng:
-ssh-keyscan -p 2222 -H YOUR_VPS_HOST
-```
-
-Trong tab **Variables**, có thể đặt:
-
-| Variable | Mặc định |
-| --- | --- |
-| `VPS_USER` | `deploy` |
-| `VPS_PORT` | `22` |
-| `VPS_DEPLOY_PATH` | `/var/www/cute-boi` |
+Tuỳ chọn: đặt **Variable** `VPS_DEPLOY_PATH` nếu muốn đổi thư mục mặc định `/var/www/cute-boi`.
 
 ### Chuẩn bị VPS một lần (Ubuntu/Debian + Nginx)
 

@@ -3,7 +3,6 @@ set -euo pipefail
 
 : "${VPS_HOST:?Add VPS_HOST to GitHub Actions secrets}"
 : "${VPS_PRIVATE_KEY:?Add VPS_PRIVATE_KEY to GitHub Actions secrets}"
-: "${VPS_KNOWN_HOSTS:?Add VPS_KNOWN_HOSTS to GitHub Actions secrets}"
 : "${VPS_USER:=deploy}"
 : "${VPS_PORT:=22}"
 : "${VPS_DEPLOY_PATH:=/var/www/cute-boi}"
@@ -22,9 +21,9 @@ ssh_dir=$(mktemp -d)
 trap 'rm -rf "$ssh_dir"' EXIT
 chmod 700 "$ssh_dir"
 printf '%s\n' "$VPS_PRIVATE_KEY" > "$ssh_dir/key"
-printf '%s\n' "$VPS_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+touch "$ssh_dir/known_hosts"
 chmod 600 "$ssh_dir/key" "$ssh_dir/known_hosts"
-ssh_options=(-i "$ssh_dir/key" -p "$VPS_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$ssh_dir/known_hosts" -o ConnectTimeout=15)
+ssh_options=(-i "$ssh_dir/key" -p "$VPS_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$ssh_dir/known_hosts" -o ConnectTimeout=15)
 target="$VPS_USER@$VPS_HOST"
 release="$VPS_DEPLOY_PATH/releases/$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
 
