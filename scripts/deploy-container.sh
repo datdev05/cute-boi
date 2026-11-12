@@ -33,11 +33,13 @@ trap cleanup EXIT
 wait_ready() {
   local name=$1
   for ((attempt=0; attempt<20; attempt++)); do
-    if docker exec "$name" wget -q -O /dev/null http://localhost/; then
+    if docker exec "$name" wget -q -T 3 -O /dev/null http://127.0.0.1/; then
       return 0
     fi
     sleep 1
   done
+  echo "Container did not become ready: $name" >&2
+  docker exec "$name" nginx -T >&2 || true
   docker logs --tail 30 "$name" >&2 || true
   return 1
 }
@@ -60,7 +62,7 @@ docker run -d --name "$container_name" --restart unless-stopped \
   -p "$app_port:80" "$image" >/dev/null
 wait_ready "$container_name"
 curl --fail --silent --show-error --retry 5 --retry-connrefused --retry-delay 1 \
-  --connect-timeout 3 --max-time 5 "http://localhost:$app_port/" >/dev/null
+  --connect-timeout 3 --max-time 5 "http://127.0.0.1:$app_port/" >/dev/null
 switching=false
 if [[ "$had_previous" == true ]]; then
   docker rm "$backup" >/dev/null

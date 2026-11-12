@@ -29,6 +29,14 @@ jobs:
         run: |
           python3 scripts/check-site.py
           node --check /tmp/cute-boi-inline.js
+      - name: Build image and smoke-test HTTP
+        run: |
+          docker build -t cute-boi-ci .
+          docker run -d --name cute-boi-ci -p 127.0.0.1:3015:80 cute-boi-ci
+          trap 'docker logs cute-boi-ci; docker rm -f cute-boi-ci' EXIT
+          curl --fail --silent --show-error --retry 15 --retry-connrefused --retry-delay 1 \
+            --connect-timeout 3 --max-time 5 http://127.0.0.1:3015/ > /dev/null
+          docker exec cute-boi-ci wget -q -T 3 -O /dev/null http://127.0.0.1/
       - name: Check deployment script
         run: |
           bash -n scripts/deploy.sh
